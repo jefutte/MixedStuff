@@ -1,0 +1,36 @@
+// Changes in VPN GW configuration are logged here
+// OperationName can be: SetGatewayConfiguration, SetConnectionConfiguration, HostMaintenanceEvent, GatewayTenantPrimaryChanged, MigrateCustomerSubscription, GatewayResourceMove, ValidateGatewayConfiguration.
+AzureDiagnostics  
+| where Category == "GatewayDiagnosticLog"  
+| project TimeGenerated, OperationName, Message, Resource, ResourceGroup  
+| sort by TimeGenerated asc
+
+// Trace connectivity status etc from VPN tunnels
+AzureDiagnostics
+| where Category == "TunnelDiagnosticLog"
+//| where Level != "Informational"
+| where AdditionalFields.remoteIP == "<ip address>"
+| project TimeGenerated, OperationName, Level, status_s, AdditionalFields.remoteIP
+
+// Trace changes in statically modified routes or routes from BGP
+AzureDiagnostics
+| where Category == "RouteDiagnosticLog"
+
+// Find events and errors in IKE/IPsec logs
+AzureDiagnostics  
+| where Category == "IKEDiagnosticLog" 
+| extend Message1=Message
+| parse Message with * "Remote " RemoteIP ":" * "500: Local " LocalIP ":" * "500: " Message2
+| extend Event = iif(Message has "SESSION_ID",Message2,Message1)
+| project TimeGenerated, RemoteIP, LocalIP, Event, Level 
+| sort by TimeGenerated asc
+
+
+AzureDiagnostics  
+| where Category == "IKEDiagnosticLog" 
+| extend Message1=Message
+| parse Message with * "Remote " RemoteIP ":" * "500: Local " LocalIP ":" * "500: " Message2
+| extend Event = iif(Message has "SESSION_ID",Message2,Message1)
+| where RemoteIP == "<onprem ip>" // and Event contains "retransmit" //look for events with SA_DELETE & IKE retransmit
+| project TimeGenerated, RemoteIP, LocalIP, Event, Level 
+| sort by TimeGenerated asc
